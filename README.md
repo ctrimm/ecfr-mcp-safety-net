@@ -106,7 +106,7 @@ All configuration is via environment variables; there are no config files or fla
 | `ECFR_MCP_DATA` | `data/` | Path to the index directory (vectors, corpus, SQLite metadata). |
 | `ECFR_MCP_LLM_URL` | unset | Base URL of a local OpenAI-compatible server, e.g. `http://localhost:1234/v1` for LM Studio. Enables the best tier with HyDE and rerank both running locally, one request at a time; OpenRouter is never called, even if a key is set. Load the model with at least 8k context. |
 | `ECFR_MCP_LLM_MODEL` | `google/gemma-4-12b` | Model on the local server, used for both HyDE and rerank. |
-| `ECFR_MCP_LLM_REASONING` | `none` | `reasoning_effort` sent to the local server. `none` turns thinking off (Gemma 4: ~1.5s vs ~17s per call); `low`/`medium`/`high` let it think; `off` sends nothing. |
+| `ECFR_MCP_LLM_REASONING` | `none` | `reasoning_effort` sent to the local server. `none` turns thinking off (Gemma 4: ~1.5s vs ~17s per call); `low`/`medium`/`high` let it think (Gemma 4 treats all three as on); `off` sends nothing. Thinking on scored lower and ran ~9× slower on the golden set (`golden/results-2026-10-28.md`). |
 
 **Claude Desktop example** with all options shown:
 
@@ -145,6 +145,8 @@ queries, 50% paraphrase): best-tier r@1=**0.81** / r@3=0.88 / r@5=0.90
 | 8 | Free tier: citation fast-path + vectors | 0.60 | 0.78 | 0.80 | 0 | $0 |
 | 9 | HyDE + gpt-5.4-nano | 0.58 | 0.88 | 0.94 | 6 | $0.170 |
 | 10 | HyDE + Gemma 4 12B, local (LM Studio), thinking off ‡ | 0.84 | 0.94 | 0.94 | 6 | $0 |
+| 11 | HyDE + Gemma 4 12B, local, thinking on ‡ | 0.74 | 0.86 | 0.90 | 6 | $0 |
+| 12 | HyDE + Gemma 4 e4b, local, thinking off ‡ | 0.64 | 0.84 | 0.86 | 6 | $0 |
 
 ✓ Current server default when `OPENROUTER_API_KEY` is set. Paraphrase
 r@1 = 0.75 (golden, n=16) / 0.69 (silver, n=118). Rerank batches run in
@@ -157,8 +159,11 @@ reasoning). Luna failures fall back to flash-lite, then free tier.
 ≈ ±0.09) and may also reflect model variance in HyDE quality. The silver
 set run will give a stable read.
 
-‡ Measured 2026-10-27 on an M4 Pro (24 GB), one request at a time, ~102s/query.
-Paraphrase r@1 = 0.58 (n=12); natural 0.91. `golden/results-2026-10-27.md`.
+‡ Row 10 measured 2026-10-27 on an M4 Pro (24 GB), one request at a time, ~102s/query;
+paraphrase r@1 = 0.58 (n=12), natural 0.91 (`golden/results-2026-10-27.md`). Silver set
+(2026-10-28, M3 Ultra, ~42s/query): r@1=**0.81** / r@3=0.89 / r@5=0.89 (natural 0.93,
+paraphrase 0.68), matching Luna. Row 11: 6 of 45 LLM queries degraded when reasoning
+never finished, ~367s/query. Row 12, silver: 0.58 / 0.78 / 0.84. `golden/results-2026-10-28.md`.
 
 **Untested candidate:** `bge-reranker-v2-m3`, a self-hosted cross-encoder
 (zero API cost; an external 2026-10-18 report puts it at Cohere Rerank
