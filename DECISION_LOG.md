@@ -27,6 +27,8 @@ stays the default local model.
   (identical output on a probe) and rejects `on` itself with HTTP 400.
 - **e4b is too small:** silver r@1 0.58, paraphrase 0.42. It finds candidates (r@5 0.84) but
   ranks them poorly.
+- **Rerank passages stay at 1,500 chars.** Cutting them to 800 lowered silver r@1 to 0.75 (from 0.81)
+  and saved ~7% of the time: on an M3 Ultra the cost is six LLM calls in series, not prompt reading.
 
 ## 2026-10-27: Best tier can run on a local LLM; Gemma 4 12B matches Luna at r@1
 
