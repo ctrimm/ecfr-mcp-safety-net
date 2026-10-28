@@ -65,6 +65,7 @@ The tier is picked from the environment; there are no flags.
 |---|---|---|---|---|
 | unset | unset | **free** | 0.60 / 0.78 / 0.80 | $0, offline |
 | unset | set | **best** | ~0.82 / 0.98 / 0.98 | ~$0.002 / query |
+| unset | either, with `ECFR_MCP_LLM_URL` set | **best, local** | 0.84 / 0.94 / 0.94 | $0, ~100s / query (M4 Pro) |
 | `free` or `best` | either | pinned | | |
 
 - **free:** citation fast-path, then cosine similarity over whole-section
@@ -81,6 +82,15 @@ The tier is picked from the environment; there are no flags.
 
   **To use flash-lite instead of Luna** (faster, ~1–2s/query, 0.76 r@1):
   set `ECFR_MCP_RERANKER=flash-lite`. To disable HyDE: `ECFR_MCP_HYDE=0`.
+- **best, local:** the same HyDE + rerank, run on a local OpenAI-compatible
+  server (LM Studio, Ollama, llama.cpp) one request at a time. Nothing leaves
+  the machine. Measured with `google/gemma-4-12b`, thinking off; see
+  `golden/results-2026-10-27.md`:
+
+  ```bash
+  lms load google/gemma-4-12b -c 16384 --parallel 1
+  claude mcp add ecfr -e ECFR_MCP_LLM_URL=http://localhost:1234/v1 -- /path/to/.venv/bin/ecfr-mcp
+  ```
 
 ## Environment variables
 
@@ -94,6 +104,9 @@ All configuration is via environment variables; there are no config files or fla
 | `ECFR_MCP_HYDE` | `1` | Set to `0` to disable HyDE candidate generation and use the plain query vector instead. |
 | `ECFR_MCP_HYDE_MODEL` | `google/gemini-2.5-flash-lite` | OpenRouter model for HyDE passage generation. Any cheap, fast chat model works well here. |
 | `ECFR_MCP_DATA` | `data/` | Path to the index directory (vectors, corpus, SQLite metadata). |
+| `ECFR_MCP_LLM_URL` | unset | Base URL of a local OpenAI-compatible server, e.g. `http://localhost:1234/v1` for LM Studio. Enables the best tier with HyDE and rerank both running locally, one request at a time; OpenRouter is never called, even if a key is set. Load the model with at least 8k context. |
+| `ECFR_MCP_LLM_MODEL` | `google/gemma-4-12b` | Model on the local server, used for both HyDE and rerank. |
+| `ECFR_MCP_LLM_REASONING` | `none` | `reasoning_effort` sent to the local server. `none` turns thinking off (Gemma 4: ~1.5s vs ~17s per call); `low`/`medium`/`high` let it think; `off` sends nothing. |
 
 **Claude Desktop example** with all options shown:
 
@@ -131,6 +144,7 @@ queries, 50% paraphrase): best-tier r@1=**0.81** / r@3=0.88 / r@5=0.90
 | 7 | Hybrid dense∪BM25 + flash-lite | 0.70 | 0.84 | 0.88 | ~9 | $0.143 |
 | 8 | Free tier: citation fast-path + vectors | 0.60 | 0.78 | 0.80 | 0 | $0 |
 | 9 | HyDE + gpt-5.4-nano | 0.58 | 0.88 | 0.94 | 6 | $0.170 |
+| 10 | HyDE + Gemma 4 12B, local (LM Studio), thinking off ‡ | 0.84 | 0.94 | 0.94 | 6 | $0 |
 
 ✓ Current server default when `OPENROUTER_API_KEY` is set. Paraphrase
 r@1 = 0.75 (golden, n=16) / 0.69 (silver, n=118). Rerank batches run in
@@ -142,6 +156,9 @@ reasoning). Luna failures fall back to flash-lite, then free tier.
 `gemini-2.5-flash-lite`; the 0.055 gap is within noise at n=50 (95% CI
 ≈ ±0.09) and may also reflect model variance in HyDE quality. The silver
 set run will give a stable read.
+
+‡ Measured 2026-10-27 on an M4 Pro (24 GB), one request at a time, ~102s/query.
+Paraphrase r@1 = 0.58 (n=12); natural 0.91. `golden/results-2026-10-27.md`.
 
 **Untested candidate:** `bge-reranker-v2-m3`, a self-hosted cross-encoder
 (zero API cost; an external 2026-10-18 report puts it at Cohere Rerank
