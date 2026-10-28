@@ -3,6 +3,31 @@
 Data-driven decisions made while building ecfr-mcp. Each entry: the decision,
 the evidence, the date. Decisions are revisited when new evidence contradicts them.
 
+## 2026-10-28: Local best tier stays thinking off; Gemma 4 12B confirmed on silver; e4b too small
+
+**Decision:** No code change. `ECFR_MCP_LLM_REASONING=none` stays the default and `google/gemma-4-12b`
+stays the default local model.
+
+**Evidence (Mac Studio M3 Ultra, LM Studio, `golden/results-2026-10-28.md`):**
+
+| Config | Golden r@1 / r@3 / r@5 | Silver r@1 / r@3 / r@5 |
+|---|---|---|
+| HyDE + gpt-6-luna (OpenRouter) | 0.82 / 0.98 / 0.98 | 0.81 / 0.88 / 0.90 |
+| HyDE + Gemma 4 12B, thinking off | 0.84 / 0.94 / 0.94 | 0.81 / 0.89 / 0.89 |
+| HyDE + Gemma 4 12B, thinking on (8192 budget) | 0.74 / 0.86 / 0.90 (6 degraded) | stopped at 119/236, 32 degraded |
+| HyDE + Gemma 4 e4b, thinking off | 0.64 / 0.84 / 0.86 | 0.58 / 0.78 / 0.84 |
+
+- **12B matches Luna on silver**, including paraphrase r@1 (0.68 vs 0.69). The 2026-10-27 golden
+  paraphrase gap (0.58, n=12) was small-sample noise.
+- **Thinking on is worse and ~9× slower** (~367s/query). About 11% of thinking rerank calls reason
+  until `max_tokens` and return no JSON, at 4,096, 8,192 and 16,384 alike; when the one retry also
+  runs out, the query degrades to the free tier. The shipped 4,096 budget also truncates real answers
+  (finished calls reach 7,409 tokens), but raising it doesn't fix the runaways, so it stays.
+- **Gemma 4 thinking is on/off only.** LM Studio maps `low`/`medium`/`high` to the same `on`
+  (identical output on a probe) and rejects `on` itself with HTTP 400.
+- **e4b is too small:** silver r@1 0.58, paraphrase 0.42. It finds candidates (r@5 0.84) but
+  ranks them poorly.
+
 ## 2026-10-27: Best tier can run on a local LLM; Gemma 4 12B matches Luna at r@1
 
 **Decision:** Added `ECFR_MCP_LLM_URL` (+ `ECFR_MCP_LLM_MODEL`, `ECFR_MCP_LLM_REASONING`) so HyDE and
